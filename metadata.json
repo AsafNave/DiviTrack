@@ -1,0 +1,5 @@
+{
+  "name": "DiviTrack",
+  "description": "A smart dividend calendar and tracker powered by Gemini. Manage your stock portfolio and view upcoming dividend events with real-time search grounding.",
+  "requestFramePermissions": []
+}
