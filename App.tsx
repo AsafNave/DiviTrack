@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { StockManager } from './components/StockManager';
 import { DividendAgenda } from './components/DividendAgenda';
 import { AppState, DividendData, PortfolioItem } from './types';
-import { fetchDividendData } from './services/geminiService';
+import { fetchDividendData } from './services/yahooService';
 import { CACHE_DURATION_MS, STORAGE_KEY_DATA, STORAGE_KEY_TICKERS } from './constants';
 import { LayoutList, CalendarDays, Plus } from 'lucide-react';
 
@@ -71,7 +71,7 @@ const App: React.FC = () => {
     try {
       const tickers = portfolio.map(p => p.symbol);
       const result = await fetchDividendData(tickers);
-      
+
       const newData: DividendData = {
         events: result.events,
         sources: result.sources,
@@ -80,8 +80,9 @@ const App: React.FC = () => {
 
       setData(newData);
       localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(newData));
-    } catch (err) {
-      setError("Failed to fetch dividend data. Please try again.");
+    } catch (err: any) {
+      console.error("Error executing fetch:", err);
+      setError(err.message || "Failed to fetch dividend data. Please try again.");
       setActiveTab('stocks'); // Switch back on error
     } finally {
       setIsExecuting(false);
@@ -96,7 +97,7 @@ const App: React.FC = () => {
           DiviTrack
         </h1>
         {activeTab === 'stocks' && (
-          <button 
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="p-2 bg-indigo-600 rounded-full text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
           >
@@ -108,32 +109,32 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-24 scroll-smooth">
         {error && (
-            <div className="mx-4 mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center justify-between animate-fadeIn">
-                <span className="text-sm">{error}</span>
-                <button onClick={() => setError(null)} className="text-xs hover:underline">Dismiss</button>
-            </div>
+          <div className="mx-4 mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center justify-between animate-fadeIn">
+            <span className="text-sm">{error}</span>
+            <button onClick={() => setError(null)} className="text-xs hover:underline">Dismiss</button>
+          </div>
         )}
 
         <div className="max-w-3xl mx-auto h-full">
           {activeTab === 'stocks' ? (
-             <StockManager 
-               portfolio={portfolio}
-               onAddTicker={handleAddTicker}
-               onRemoveTicker={handleRemoveTicker}
-               onUpdateQuantity={handleUpdateQuantity}
-               onExecute={handleExecute}
-               isExecuting={isExecuting}
-               isAddModalOpen={isAddModalOpen}
-               closeAddModal={() => setIsAddModalOpen(false)}
-             />
+            <StockManager
+              portfolio={portfolio}
+              onAddTicker={handleAddTicker}
+              onRemoveTicker={handleRemoveTicker}
+              onUpdateQuantity={handleUpdateQuantity}
+              onExecute={handleExecute}
+              isExecuting={isExecuting}
+              isAddModalOpen={isAddModalOpen}
+              closeAddModal={() => setIsAddModalOpen(false)}
+            />
           ) : (
-             <div className="p-4">
-               <DividendAgenda 
-                 data={data} 
-                 portfolio={portfolio} 
-                 isLoading={isExecuting} 
-               />
-             </div>
+            <div className="p-4">
+              <DividendAgenda
+                data={data}
+                portfolio={portfolio}
+                isLoading={isExecuting}
+              />
+            </div>
           )}
         </div>
       </main>
@@ -141,17 +142,17 @@ const App: React.FC = () => {
       {/* Bottom Navigation */}
       <nav className="bg-slate-900 border-t border-slate-800 fixed bottom-0 w-full z-40 pb-safe">
         <div className="flex justify-around items-center h-16">
-          <button 
+          <button
             onClick={() => setActiveTab('stocks')}
             className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === 'stocks' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
             <LayoutList className="w-6 h-6" />
             <span className="text-[10px] font-medium">Portfolio</span>
           </button>
-          
+
           <div className="w-px h-8 bg-slate-800"></div>
 
-          <button 
+          <button
             onClick={() => setActiveTab('agenda')}
             className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === 'agenda' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}
           >

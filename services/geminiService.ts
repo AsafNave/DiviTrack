@@ -1,9 +1,20 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { DividendEvent, GroundingSource } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// Initialize lazily or check for key
 export const fetchDividendData = async (tickers: string[]): Promise<{ events: DividendEvent[], sources: GroundingSource[] }> => {
+  // Use Vite's standard env var access
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("API Key is missing!");
+    throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY in .env.local");
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+  });
+
   if (tickers.length === 0) {
     return { events: [], sources: [] };
   }
@@ -11,69 +22,41 @@ export const fetchDividendData = async (tickers: string[]): Promise<{ events: Di
   const prompt = `
     I need the most recent and next upcoming dividend information for the following stock tickers: ${tickers.join(', ')}.
     
-    Please search for the latest declared dividends or reliable next estimates. 
-    For non-US stocks (e.g. those ending in .TA), ensure you look for data from specific financial portals (like investing.com, TASE, or similar) to get accurate local ex-dates and payment dates.
+    Search for the latest declared dividends or reliable next estimates. 
+    For non - US stocks(e.g., .TA), check specific financial portals.
     
-    Return the data strictly as a JSON array of objects inside a markdown code block (\`\`\`json ... \`\`\`).
-    Each object should have these fields:
-    - symbol: string (The ticker)
-    - exDate: string (YYYY-MM-DD format, date stock trades without dividend)
-    - payDate: string (YYYY-MM-DD format, date dividend is paid)
-    - amount: number (The dividend amount per share)
-    - currency: string (e.g., USD, ILS)
-    - status: string ("Confirmed" or "Estimated")
+    Return a JSON array where each object has:
+- symbol
+  - exDate(YYYY - MM - DD)
+  - payDate(YYYY - MM - DD)
+  - amount(number)
+  - currency
+  - status("Confirmed" or "Estimated")
 
-    If no upcoming dividend is found for a specific ticker (e.g. it doesn't pay dividends), omit it from the list.
-    Ensure dates are in the future or very recent past (last 30 days) if the next one isn't declared yet.
+    If no upcoming dividend is found, omit the ticker.
+    Dates must be future or recent past(30 days).
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        // responseMimeType cannot be JSON when using search, so we parse manually
-        temperature: 0.1, // Low temperature for factual data
-      },
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }]
     });
+    const response = await result.response;
+    const text = response.text();
 
-    const text = response.text;
-    
-    // Extract JSON from markdown code block
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```([\s\S]*?)```/);
     let events: DividendEvent[] = [];
-    
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        events = JSON.parse(jsonMatch[1]);
-      } catch (e) {
-        console.error("Failed to parse JSON from Gemini response", e);
-        throw new Error("Failed to parse dividend data.");
-      }
-    } else {
-        // Fallback: try to parse raw text if no code blocks
-        try {
-            events = JSON.parse(text);
-        } catch(e) {
-            console.warn("Could not parse raw text as JSON either.");
-        }
+    try {
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```([\s\S]*?)```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : text;
+      events = JSON.parse(jsonString);
+    } catch (e) {
+      console.error("Failed to parse JSON:", text);
+      throw new Error("Failed to parse dividend data.");
     }
 
-    // Extract grounding metadata sources
+    // Grounding metadata is different in this SDK version or requires specific access
+    // For now returning empty sources as we prioritize data fetching
     const sources: GroundingSource[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web?.uri && chunk.web?.title) {
-          sources.push({
-            title: chunk.web.title,
-            uri: chunk.web.uri
-          });
-        }
-      });
-    }
 
     return { events, sources };
 
